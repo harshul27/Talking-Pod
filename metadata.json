@@ -1,0 +1,5 @@
+{
+  "name": "PodCast Studio AI",
+  "description": "Transform documents into immersive podcasts and interact with an AI host in real-time.",
+  "requestFramePermissions": ["microphone"]
+}
