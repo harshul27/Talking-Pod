@@ -44,6 +44,7 @@ export default function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const nextAudioStartTimeRef = useRef<number>(0);
 
   const pcmToWav = (pcmBase64: string, sampleRate: number) => {
     const binary = atob(pcmBase64);
@@ -220,6 +221,7 @@ export default function App() {
 
     setIsLive(true);
     setLiveStatus('listening');
+    nextAudioStartTimeRef.current = 0;
     
     try {
       if (!audioContextRef.current) {
@@ -244,13 +246,19 @@ export default function App() {
       const sessionPromise = ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
         config: {
-          systemInstruction: `You are the "Studio Assistant". You are a single persona, NOT Alex or Sam. 
-          ${episodes.length > 0 ? `You have access to the following podcast episodes: ${episodes.map(e => e.title).join(', ')}.` : ''}
+          systemInstruction: `You are the "Studio Assistant", a single AI persona. 
+          Your role is to help the user understand the following document content:
+          ---
+          ${inputText.slice(0, 10000)}
+          ---
           
-          Listen for the wake word 'Hey buddy'. Once heard, answer questions about the podcast content or the original document. 
-          Be friendly, concise, and speak with a single consistent voice. 
-          If the user hasn't said 'Hey buddy', do not respond. 
-          Do not simulate multiple people talking.`,
+          Instructions:
+          1. Listen for the wake word 'Hey buddy'. Respond ONLY after hearing it.
+          2. Use the provided document text as your primary source of information.
+          3. If the answer is not in the document, use the Google Search tool to find the information.
+          4. If you cannot find the answer in the document or via search, politely state that it is out of your scope to answer.
+          5. Be concise and use a single consistent voice.`,
+          tools: [{ googleSearch: {} }] as any,
           responseModalities: ["AUDIO" as any],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } }
@@ -263,12 +271,6 @@ export default function App() {
               setLiveStatus('speaking');
               const audioData = message.serverContent.modelTurn.parts[0].inlineData.data;
               playLiveAudio(audioData);
-            }
-            
-            // Handle Text Transcript (if provided by model)
-            const textPart = message.serverContent?.modelTurn?.parts?.find((p: any) => p.text);
-            if (textPart) {
-              setCurrentTranscript(prev => [...prev, { role: 'assistant', text: textPart.text }]);
             }
           },
           onclose: () => {
@@ -359,11 +361,19 @@ export default function App() {
         source.connect(destinationRef.current);
       }
       
-      // Schedule playback with a tiny offset to allow state update to propagate
-      const startTime = audioContextRef.current.currentTime + 0.05;
+      // Sequential scheduling to prevent overlapping voices
+      const now = audioContextRef.current.currentTime;
+      if (nextAudioStartTimeRef.current < now) {
+        nextAudioStartTimeRef.current = now + 0.05;
+      }
+      
+      const startTime = nextAudioStartTimeRef.current;
+      nextAudioStartTimeRef.current += buffer.duration;
       
       source.onended = () => {
-        setLiveStatus('listening');
+        if (audioContextRef.current && audioContextRef.current.currentTime >= nextAudioStartTimeRef.current - 0.1) {
+          setLiveStatus('listening');
+        }
       };
 
       source.start(startTime);
