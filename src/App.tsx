@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Play, Pause, Upload, MessageSquare, Radio, Volume2, Loader2, Sparkles, FileText, ChevronRight, Headphones, X, Save, History, Download, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDropzone } from 'react-dropzone';
@@ -20,12 +20,105 @@ interface SavedSession {
 
 export default function App() {
   const [inputText, setInputText] = useState('');
+  const [urlInput, setUrlInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'monitor' | 'studio'>('monitor');
+  const [sourceInfo, setSourceInfo] = useState<{ title: string, type: string, source: string } | null>(null);
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [episodes, setEpisodes] = useState<PodcastEpisode[]>([]);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState<number | null>(null);
   const [episodeAudios, setEpisodeAudios] = useState<Record<number, string>>({});
   const [isLoadingAudio, setIsLoadingAudio] = useState<number | null>(null);
   
+  const [currentExtensionTime, setCurrentExtensionTime] = useState<number | null>(null);
+  const [extensionDuration, setExtensionDuration] = useState<number | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const simulationIntervalRef = useRef<any>(null);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const parseTimeline = (text: string) => {
+    const regex = /(\[\d+s\])/g;
+    const parts = text.split(regex);
+    const segments: { time: number; text: string }[] = [];
+    
+    let currentTimestamp = 0;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (!part) continue;
+      
+      const match = part.match(/^\[(\d+)s\]$/);
+      if (match) {
+        currentTimestamp = parseInt(match[1], 10);
+      } else {
+        segments.push({
+          time: currentTimestamp,
+          text: part
+        });
+      }
+    }
+    return segments.length > 0 ? segments : [{ time: 0, text: text }];
+  };
+
+  const handleSimulateSync = () => {
+    if (isSimulating) {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+      }
+      setIsSimulating(false);
+      setCurrentExtensionTime(null);
+    } else {
+      // Load sample video and transcript if not already viewing a transcribed video
+      if (!inputText || sourceInfo?.type !== 'video' || !inputText.includes('[')) {
+        const sampleUrl = "https://www.youtube.com/watch?v=KRAbSnrcVX0";
+        setUrlInput(sampleUrl);
+        setSourceInfo({
+          title: "Introduction to Artificial General Intelligence",
+          type: "video",
+          source: "youtube"
+        });
+        setInputText(
+          "[0s] Welcome everyone to today's episode of Tech Deep Dive. Today we are tackling a massive topic: AGI, or Artificial General Intelligence. " +
+          "[30s] To start things off, let's distinguish AGI from narrow AI. Narrow AI is what we use today: chess programs, translation apps, or voice command handlers that do one single task incredibly well. AGI is theoretical: an AI that possesses general cognitive abilities, enabling it to learn and solve any intellectual challenge a human can. " +
+          "[90s] Many researchers from top labs like OpenAI and DeepMind believe we are within a decade of achieving AGI, while others urge caution, highlighting limitations in neural networks' generalization capabilities. " +
+          "[150s] There are severe security, economic, and alignment questions we have to answer. How do we ensure a system with superhuman intelligence respects human safety and intent? " +
+          "[210s] In conclusion, AGI represents the ultimate frontier of computing. Keep listening as we bring in some external facts about current compute trends to make you smarter."
+        );
+        setActiveTab('monitor');
+      }
+      
+      setIsLive(true);
+      setCurrentExtensionTime(0);
+      setExtensionDuration(240);
+      setIsSimulating(true);
+
+      simulationIntervalRef.current = setInterval(() => {
+        setCurrentExtensionTime(prev => {
+          if (prev === null) return 0;
+          if (prev >= 240) {
+            clearInterval(simulationIntervalRef.current);
+            setIsSimulating(false);
+            return null;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+  };
+
+  // Cleanup simulation interval
+  useEffect(() => {
+    return () => {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+      }
+    };
+  }, []);
+
   const [isLive, setIsLive] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'listening' | 'speaking'>('idle');
   const [pausedAt, setPausedAt] = useState<number | null>(null);
@@ -93,6 +186,7 @@ export default function App() {
         const text = e.target?.result;
         if (typeof text === 'string') {
           setInputText(text);
+          setSourceInfo(null);
         }
       };
       reader.readAsText(file);
@@ -104,6 +198,30 @@ export default function App() {
     accept: { 'text/plain': ['.txt'] },
     multiple: false
   });
+
+  const handleFetchUrl = async () => {
+    if (!urlInput.trim()) return;
+    setIsFetchingUrl(true);
+    try {
+      const response = await fetch('/api/fetch-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput })
+      });
+      const data = await response.json();
+      if (data.content) {
+        setInputText(data.content);
+        setSourceInfo({ title: data.title, type: data.type, source: data.source });
+      } else {
+        alert("Could not extract content from this URL.");
+      }
+    } catch (error) {
+      console.error("Error fetching URL:", error);
+      alert("Error fetching URL content.");
+    } finally {
+      setIsFetchingUrl(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!inputText.trim()) return;
@@ -188,6 +306,43 @@ export default function App() {
     a.click();
   };
 
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (!message || message.source !== 'GEMINI_PODCAST_EXTENSION') return;
+
+      console.log('Received Chrome Extension integration event:', message);
+
+      if (message.type === 'SYNC_STATE') {
+        if (message.url) {
+          setUrlInput(message.url);
+        }
+        if (message.content) {
+          setInputText(message.content);
+          setSourceInfo({
+            title: message.title || "Chrome Extracted Content",
+            type: message.contentType || "article",
+            source: message.sourceName || "extension"
+          });
+          setActiveTab('monitor');
+        }
+        if (typeof message.isLive === 'boolean') {
+          setIsLive(message.isLive);
+        }
+      } else if (message.type === 'UPDATE_PLAYBACK') {
+        if (typeof message.currentTime === 'number') {
+          setCurrentExtensionTime(message.currentTime);
+          if (message.duration) {
+            setExtensionDuration(message.duration);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    return () => window.removeEventListener('message', handleExtensionMessage);
+  }, []);
+
   const toggleLive = async () => {
     if (isLive) {
       setIsLive(false);
@@ -243,34 +398,75 @@ export default function App() {
 
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
       
+      const currentEpisode = currentEpisodeIndex !== null ? episodes[currentEpisodeIndex] : null;
+      const playbackPos = audioRef.current ? audioRef.current.currentTime : 0;
+
+      const assistantInstruction = `You are the "Studio Assistant".
+      Active Tab: ${activeTab === 'monitor' ? 'External Content Hub' : 'Podcast Studio'}
+      Primary content context: ${sourceInfo ? `${sourceInfo.type === 'video' ? 'YouTube Video Transcript' : 'Web Article'}: "${sourceInfo.title}"` : 'Uploaded Document'}
+      Primary content: ${inputText.slice(0, 3000)}
+      Rules: Respond only after hearing "Hey buddy". Use primary content first. Use Google Search for missing info. Use 'get_current_playback_time' for audio context.
+      
+      Continuity & State Management:
+      - If in 'External Content Hub', focus on tracking the transcript and helping the user navigate the original source.
+      - If in 'Podcast Studio', focus on the generated podcast episodes.
+      - If the user has been paused for a while and asks "what happened", use the 'get_current_playback_time' tool, analyze the transcript context around that timestamp, and provide a brief summary of the last 1-2 minutes.
+      - If content is from YouTube (check markers like [Xs]), help the user identify where specific topics appear in the original video.`;
+
       const sessionPromise = ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
         config: {
-          systemInstruction: `You are the "Studio Assistant", a single AI persona. 
-          Your role is to help the user understand the following document content:
-          ---
-          ${inputText.slice(0, 10000)}
-          ---
-          
-          Instructions:
-          1. Listen for the wake word 'Hey buddy'. Respond ONLY after hearing it.
-          2. Use the provided document text as your primary source of information.
-          3. If the answer is not in the document, use the Google Search tool to find the information.
-          4. If you cannot find the answer in the document or via search, politely state that it is out of your scope to answer.
-          5. Be concise and use a single consistent voice.`,
-          tools: [{ googleSearch: {} }] as any,
+          systemInstruction: assistantInstruction,
+          tools: [
+            { googleSearch: {} },
+            {
+              functionDeclarations: [
+                {
+                  name: "get_current_playback_time",
+                  description: "Get audio playback status",
+                  parameters: { type: "OBJECT", properties: {} }
+                }
+              ]
+            }
+          ] as any,
           responseModalities: ["AUDIO" as any],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } }
-          }
         },
         callbacks: {
           onmessage: async (message: any) => {
-            // Handle Audio
-            if (message.serverContent?.modelTurn?.parts?.[0]?.inlineData) {
-              setLiveStatus('speaking');
-              const audioData = message.serverContent.modelTurn.parts[0].inlineData.data;
-              playLiveAudio(audioData);
+            // Robust part handling
+            const parts = message.serverContent?.modelTurn?.parts || [];
+            
+            for (const part of parts) {
+              // Handle Function Call
+              if (part.functionCall) {
+                const call = part.functionCall;
+                if (call.name === 'get_current_playback_time') {
+                  const currentTime = audioRef.current?.currentTime || 0;
+                  const isPaused = audioRef.current?.paused || false;
+                  const episodeTitle = currentEpisode?.title || "Unknown Episode";
+                  try {
+                    liveSessionRef.current?.sendRealtimeInput({
+                      functionResponses: [{
+                        name: 'get_current_playback_time',
+                        response: { result: { currentTime, episodeTitle, isPaused } }
+                      }]
+                    });
+                  } catch (err) {
+                    console.error("Error sending response:", err);
+                  }
+                }
+              }
+
+              // Handle Audio
+              if (part.inlineData) {
+                setLiveStatus('speaking');
+                playLiveAudio(part.inlineData.data);
+              }
+
+              // Handle Text Transcript
+              if (part.text) {
+                setCurrentTranscript(prev => [...prev, { role: 'assistant', text: part.text }]);
+              }
             }
           },
           onclose: () => {
@@ -400,60 +596,256 @@ export default function App() {
                 <Radio className="w-4 h-4 animate-pulse" />
                 Gemini 3.5 Studio
               </div>
-              <button 
-                onClick={() => setShowHistory(true)}
-                className="p-2 rounded-xl bg-[#151619] border border-[#2a2b2e] text-[#8e9299] hover:text-white transition-all flex items-center gap-2 text-xs font-mono uppercase tracking-widest"
-              >
-                <History className="w-4 h-4" />
-                History
-              </button>
+              <div className="flex items-center gap-3">
+                {sourceInfo && (
+                  <div className="px-3 py-1.5 rounded-lg bg-[#ff4e00]/10 border border-[#ff4e00]/20 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#ff4e00] animate-pulse" />
+                    <span className="text-[10px] font-mono text-[#ff4e00] uppercase tracking-wider">
+                      {sourceInfo.type === 'video' ? 'Live Video Transcribe' : 'Sync Article'}
+                    </span>
+                  </div>
+                )}
+                <button 
+                  onClick={() => setShowHistory(true)}
+                  className="p-2 rounded-xl bg-[#151619] border border-[#2a2b2e] text-[#8e9299] hover:text-white transition-all flex items-center gap-2 text-xs font-mono uppercase tracking-widest"
+                >
+                  <History className="w-4 h-4" />
+                  History
+                </button>
+              </div>
             </div>
+            
             <h1 className="text-6xl font-light tracking-tight text-white leading-none">
               PodCast <span className="italic font-serif">Studio</span>
             </h1>
-            <p className="text-[#8e9299] text-sm max-w-md leading-relaxed">
-              Transform documents into immersive multi-episode podcasts with interactive AI hosting.
-            </p>
+            
+            {/* Tab Switcher */}
+            <div className="flex p-1 bg-[#151619] border border-[#2a2b2e] rounded-2xl">
+              <button
+                onClick={() => setActiveTab('monitor')}
+                className={cn(
+                  "flex-1 py-3 px-4 rounded-xl text-xs font-mono uppercase tracking-widest transition-all",
+                  activeTab === 'monitor' ? "bg-[#2a2b2e] text-white" : "text-[#8e9299] hover:text-white"
+                )}
+              >
+                External Monitor
+              </button>
+              <button
+                onClick={() => setActiveTab('studio')}
+                className={cn(
+                  "flex-1 py-3 px-4 rounded-xl text-xs font-mono uppercase tracking-widest transition-all",
+                  activeTab === 'studio' ? "bg-[#2a2b2e] text-white" : "text-[#8e9299] hover:text-white"
+                )}
+              >
+                Podcast AI
+              </button>
+            </div>
           </header>
 
-          <div className="space-y-4">
-            <div 
-              {...getRootProps()} 
-              className={cn(
-                "border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer",
-                isDragActive ? "border-[#ff4e00] bg-[#ff4e00]/5" : "border-[#2a2b2e] hover:border-[#4a4b4e] bg-[#151619]/50"
-              )}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#1a1b1e] flex items-center justify-center text-[#8e9299]">
-                  <Upload className="w-6 h-6" />
+          <AnimatePresence mode="wait">
+            {activeTab === 'monitor' ? (
+              <motion.div
+                key="monitor"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                <div className="space-y-4">
+                  <p className="text-[#8e9299] text-sm leading-relaxed">
+                    Paste any public URL (YouTube, Blogs, News) to track transcripts and sync with the assistant.
+                  </p>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="YouTube or URL..."
+                      className="flex-1 bg-[#151619] border border-[#2a2b2e] rounded-2xl px-4 py-3 text-xs focus:outline-none focus:border-[#ff4e00]/50 transition-all placeholder:text-[#4a4b4e]"
+                    />
+                    <button
+                      onClick={handleFetchUrl}
+                      disabled={isFetchingUrl || !urlInput.trim()}
+                      className="px-4 bg-[#1a1b1e] border border-[#2a2b2e] text-[#8e9299] hover:text-white rounded-2xl transition-all disabled:opacity-50"
+                    >
+                      {isFetchingUrl ? <Loader2 className="w-4 h-4 animate-spin text-[#ff4e00]" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-white">Upload Document</p>
-                  <p className="text-xs text-[#8e9299]">Drag & drop or click to upload (.txt)</p>
+
+                <div className="p-6 bg-[#151619]/50 border border-[#2a2b2e] rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-[#ff4e00]">State Tracker</h3>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setIsLive(!isLive)}
+                        className={cn(
+                          "px-2 py-1 rounded text-[9px] font-mono uppercase tracking-widest transition-all",
+                          isLive ? "bg-green-500/20 text-green-500" : "bg-[#2a2b2e] text-[#8e9299]"
+                        )}
+                      >
+                        {isLive ? 'Active' : 'Sleep'}
+                      </button>
+                      <div className={cn("w-2 h-2 rounded-full", isLive ? "bg-green-500 animate-pulse" : "bg-[#4a4b4e]")} />
+                    </div>
+                  </div>
+                  <div className="h-64 overflow-y-auto scrollbar-hide text-xs font-mono text-[#8e9299] space-y-3 pr-1">
+                    {sourceInfo?.type === 'video' ? (() => {
+                      const segments = parseTimeline(inputText);
+                      return segments.map((seg, idx) => {
+                        const nextSeg = segments[idx + 1];
+                        const isActive = currentExtensionTime !== null && 
+                          currentExtensionTime >= seg.time && 
+                          (nextSeg === undefined || currentExtensionTime < nextSeg.time);
+
+                        return (
+                          <div 
+                            key={idx} 
+                            onClick={() => {
+                              if (isLive) setCurrentExtensionTime(seg.time);
+                            }}
+                            className={cn(
+                              "p-3 rounded-xl border transition-all duration-300 cursor-pointer text-left",
+                              isActive 
+                                ? "bg-[#ff4e00]/10 border-[#ff4e00]/30 text-white shadow-[0_0_15px_rgba(255,78,0,0.05)]" 
+                                : "bg-[#1a1b1e]/30 border-[#2a2b2e]/50 hover:border-[#4a4b4e] hover:bg-[#1a1b1e]/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={cn(
+                                "text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded font-mono",
+                                isActive ? "bg-[#ff4e00] text-white" : "bg-[#2a2b2e] text-[#8e9299]"
+                              )}>
+                                {formatTime(seg.time)}
+                              </span>
+                              {isActive && (
+                                <span className="text-[9px] text-[#ff4e00] font-bold uppercase tracking-widest animate-pulse">
+                                  Currently Synced
+                                </span>
+                              )}
+                            </div>
+                            <p className={cn("text-xs leading-relaxed transition-all", isActive ? "text-gray-100 font-medium" : "text-[#8e9299]")}>
+                              {seg.text}
+                            </p>
+                          </div>
+                        );
+                      });
+                    })() : (
+                      <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                        <p className="text-[#8e9299] text-xs leading-relaxed max-w-xs mb-3">
+                          {inputText || "No content ingested yet. Paste a URL above or trigger the live simulator below."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="relative group">
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Or paste your content here..."
-                className="w-full h-48 bg-[#151619] border border-[#2a2b2e] rounded-3xl p-6 text-sm focus:outline-none focus:border-[#ff4e00]/50 transition-all resize-none placeholder:text-[#4a4b4e]"
-              />
-            </div>
+                {/* Synced Progress Meter if connected */}
+                {currentExtensionTime !== null && extensionDuration !== null && (
+                  <div className="p-4 bg-[#151619] border border-[#ff4e00]/20 rounded-2xl space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-mono whitespace-nowrap">
+                      <span className="text-[#ff4e00] font-bold uppercase tracking-wider">Browser Context Tracker</span>
+                      <span className="text-white font-bold">{formatTime(currentExtensionTime)} / {formatTime(extensionDuration)}</span>
+                    </div>
+                    <div className="w-full bg-[#2a2b2e] h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-gradient-to-r from-[#ff4e00] to-[#ffaa00] h-full transition-all duration-1000"
+                        style={{ width: `${(currentExtensionTime / extensionDuration) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
-            <button 
-              onClick={handleGenerate}
-              disabled={isGenerating || !inputText.trim()}
-              className="w-full py-4 bg-[#ff4e00] text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-3 hover:bg-[#ff6a26] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-[#ff4e00]/20"
-            >
-              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-              Generate 3-Episode Series
-            </button>
-          </div>
+                <div className="p-6 bg-gradient-to-br from-[#1a1b1e] to-[#0a0502] border border-[#2a2b2e] rounded-3xl space-y-4 text-left">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-[#2a2b2e] flex items-center justify-center text-[#ff4e00] shrink-0">
+                      <Headphones className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-medium text-white">Browser Sync Proxy</h4>
+                      <p className="text-[11px] text-[#8e9299] leading-relaxed">
+                        The "Gemini Companion" extension tracks your browser context real-time. Use the simulator below to experience it raw.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-[#2a2b2e]/50 flex gap-2">
+                    <button
+                      onClick={handleSimulateSync}
+                      className={cn(
+                        "flex-1 py-2.5 px-4 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all border",
+                        isSimulating 
+                          ? "bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20" 
+                          : "bg-[#ff4e00] border-transparent text-white hover:bg-[#ff6a26]"
+                      )}
+                    >
+                      {isSimulating ? "🛑 Stop Simulator" : "▶️ Run Live Sync Demo"}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="studio"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-6"
+              >
+                <div className="space-y-4">
+                  <p className="text-[#8e9299] text-sm leading-relaxed">
+                    Upload a document or paste script text to produce a professional multi-episode podcast.
+                  </p>
+
+                  <div 
+                    {...getRootProps()} 
+                    className={cn(
+                      "border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer",
+                      isDragActive ? "border-[#ff4e00] bg-[#ff4e00]/5" : "border-[#2a2b2e] hover:border-[#4a4b4e] bg-[#151619]/50"
+                    )}
+                  >
+                    <input {...getInputProps()} />
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-[#1a1b1e] flex items-center justify-center text-[#8e9299]">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-white">Upload Script</p>
+                        <p className="text-xs text-[#8e9299]">Drag & drop or click to upload (.txt)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative group">
+                    {sourceInfo && (
+                      <div className="absolute -top-3 left-6 px-3 py-1 bg-[#1a1b1e] border border-[#2a2b2e] rounded-lg z-20 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#ff4e00]" />
+                        <span className="text-[10px] font-mono text-white truncate max-w-[200px]">
+                          {sourceInfo.title}
+                        </span>
+                      </div>
+                    )}
+                    <textarea
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      placeholder="Or paste your content here..."
+                      className="w-full h-48 bg-[#151619] border border-[#2a2b2e] rounded-3xl p-6 text-sm focus:outline-none focus:border-[#ff4e00]/50 transition-all resize-none placeholder:text-[#4a4b4e]"
+                    />
+                  </div>
+                  
+                  <button 
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !inputText.trim()}
+                    className="w-full py-4 bg-[#ff4e00] text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-3 hover:bg-[#ff6a26] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-[#ff4e00]/20"
+                  >
+                    {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                    Produce Podcast Series
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Live Agent Hardware Widget */}
           <div className="bg-[#151619] border border-[#2a2b2e] rounded-3xl p-6 space-y-6 shadow-2xl">

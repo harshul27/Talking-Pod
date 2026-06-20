@@ -3,13 +3,23 @@
 ## 1. Project Description
 
 ### Vision
-The **Gemini Podcast Studio** is a next-generation content transformation platform designed to bridge the gap between static text and immersive audio experiences. In an era of information overload, the project aims to provide a "hands-free" way to consume complex documents—ranging from research papers and corporate reports to creative stories—by converting them into professionally structured, multi-episode podcasts.
+The **Gemini Podcast Studio** is a dual-mode content transformation and monitoring platform. It bridges the gap between static content (documents, web articles, YouTube videos) and interactive audio experiences.
 
 ### Core Functionality
-The application serves as a high-fidelity production suite where users can upload or paste text content. The system then orchestrates a sophisticated AI pipeline to:
-1.  **Analyze & Script**: Break down the document into thematic segments and write a natural, conversational script for two distinct hosts, Alex and Sam.
-2.  **Produce Audio**: Generate high-quality voiceovers for each episode using specialized Text-to-Speech models, complete with proper WAV formatting for browser playback.
-3.  **Interactive Hosting**: Provide a "Studio Assistant"—a real-time AI agent that listens for the wake word **"Hey buddy"**. This assistant has full context of the uploaded document and can answer questions, clarify points, or provide deeper insights. If information is missing from the document, it automatically utilizes **Google Search** to provide real-time answers, ensuring a comprehensive knowledge base.
+The application is divided into two specialized environments:
+
+#### 1. External Content Monitor (Tab: Monitor)
+This mode is designed for real-time engagement with existing web media:
+*   **Transcript Ingestion**: Scrapes text from URLs or extracts timestamped transcripts from YouTube videos.
+*   **State Tracking**: Maintains a persistent record of the user's progress through the source content via a dedicated "State Tracker" UI.
+*   **Chrome Extension Proxy**: Prepared to interface with a companion extension to sync browsing state directly into the agent.
+*   **Real-time Assistance**: The interactive agent can answer questions about the *original source* while tracking the listener's covered segments.
+
+#### 2. Podcast Production Studio (Tab: Podcast AI)
+This mode handles the creation of entirely new audio content:
+*   **Dynamic Orchestration**: Assesses content depth to determine the optimal number of episodes (1-5).
+*   **Factual Augmentation**: Conducts real-time web research to enrich the script with reliable external context.
+*   **High-Fidelity Production**: Generates multi-host conversational audio with professional pacing.
 
 ### User Experience (UI/UX)
 The interface is inspired by professional audio hardware and luxury travel aesthetics. It features a "Dark Studio" theme with high-contrast accents (Studio Orange), fluid animations via Motion, and a bento-grid layout that separates the production controls from the playback monitor.
@@ -26,7 +36,8 @@ The objective was to build a full-stack web application that could transform any
 
 ### **Action**
 *   **AI Orchestration**: Integrated three distinct Gemini models to handle different parts of the pipeline: `gemini-3-flash` for scripting, `gemini-2.5-flash-tts` for high-fidelity episode audio, and `gemini-3.1-flash-live` for the interactive assistant.
-*   **Knowledge Augmentation**: Configured the Live Assistant with **Google Search grounding**, enabling it to fetch external information when the user's document doesn't contain the answer.
+*   **Knowledge Augmentation**: Configured the Live Assistant with **Google Search grounding**, a custom **URL scraper backend**, and **YouTube Transcript integration**, enabling content ingestion from any web source or video.
+*   **State-Aware Interaction**: Implemented a **function-calling tool** (`get_current_playback_time`) that allows the AI to query exactly where the user is in the podcast. This enables "Contextual Continuity": the assistant knows what part of the YouTube video or article corresponds to the current podcast discussion.
 *   **Audio Engineering**: Developed a custom PCM-to-WAV utility to wrap raw AI audio samples into browser-compatible formats. Implemented a sequential audio queuing system in the Web Audio API to prevent overlapping voices during live interactions.
 *   **Interactive Logic**: Built a robust "Wake Word" detection system and a state-aware playback engine that automatically pauses the podcast when the user speaks and resumes precisely where it left off.
 *   **Data Persistence**: Leveraged `localStorage` and the `MediaRecorder API` to allow users to save, download, and manage transcripts and audio recordings of their interactive sessions.

@@ -15,14 +15,26 @@ export interface PodcastEpisode {
 export async function generatePodcastEpisodes(documentText: string): Promise<PodcastEpisode[]> {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Analyze the following document and transform it into a 3-episode podcast series. 
-    Each episode should have a title and a conversational script between Alex and Sam.
-    Alex is the lead host, Sam is the inquisitive co-host.
-    Format the output as a JSON array of objects, each with 'title' and 'segments' (array of {speaker, text}).
+    contents: `Analyze the following document and transform it into a professional podcast series. 
+    
+    MISSION: 
+    Your goal is to make the user significantly smarter about this topic by combining their provided content with high-value, reliable external insights.
+    
+    CRITICAL INSTRUCTIONS:
+    1. DYNAMIC STRUCTURE: Analyze the depth of the document and determine the optimal number of episodes (between 1 and 5). Don't stick to a fixed count; if it's a short memo, 1 episode is fine. If it's a long report, do 4-5.
+    2. WEB RESEARCH: For each episode topic, use your search tool to find 2-3 specific, reliable facts, statistics, or recent developments that complement (but are NOT in) the original text. 
+    3. FACT INTEGRATION: Use Sam (the inquisitive co-host) to bring up these outside facts as "interesting context I found" or "recent news related to this". This makes the podcast feel researched and multi-dimensional.
+    4. ACCURACY: Ensure all external information is highly relevant and stems from reliable sources.
+    5. PERSONAS:
+       - Alex: Professional, lead host, focuses on translating the document's core message.
+       - Sam: Inquisitive, brings in the "research" (the outside facts), asks the questions the listener is thinking.
+    
+    Format the output as a JSON array of objects.
     
     Document:
     ${documentText}`,
     config: {
+      tools: [{ googleSearch: {} }] as any,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,

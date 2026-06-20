@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini Podcast Studio Companion",
+  "version": "1.0.0",
+  "description": "Companion extension that extracts transcripts, syncs playback progress, and connects URLs effortlessly to your Gemini Podcast Studio.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "http://localhost/*",
+    "https://*.run.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

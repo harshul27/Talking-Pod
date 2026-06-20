@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0c0d0f;
+      color: #e4e4e7;
+      margin: 0;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #2a2b2e;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .brand {
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .brand span {
+      color: #ff4e00;
+      font-style: italic;
+    }
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #1a1b1e;
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid #2a2b2e;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #4a4b4e;
+    }
+    .status-dot.active {
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+    .status-text {
+      font-size: 10px;
+      font-family: monospace;
+      text-transform: uppercase;
+      color: #a1a1aa;
+    }
+    .url-section {
+      background-color: #151619;
+      border: 1px solid #2a2b2e;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 10px;
+      font-family: monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #ff4e00;
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 10px;
+      color: #a1a1aa;
+    }
+    input {
+      background-color: #1c1d21;
+      border: 1px solid #2a2b2e;
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      border-color: #ff4e00;
+    }
+    .btn {
+      background-color: #ff4e00;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.2s;
+      width: 100%;
+    }
+    .btn:hover {
+      background-color: #ff6a26;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background-color: #1c1d21;
+      border: 1px solid #2a2b2e;
+      color: #e4e4e7;
+      margin-top: 8px;
+    }
+    .btn-secondary:hover {
+      background-color: #2a2b2e;
+    }
+    .page-info {
+      margin-top: 14px;
+      background-color: #1c1d21;
+      border-radius: 8px;
+      padding: 10px;
+      border: 1px solid #2a2b2e;
+    }
+    .info-label {
+      font-size: 9px;
+      font-family: monospace;
+      text-transform: uppercase;
+      color: #71717a;
+    }
+    .info-value {
+      font-size: 11px;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 9px;
+      color: #52525b;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">Gemini<span>Companion</span></div>
+    <div class="status-badge">
+      <div id="statusDot" class="status-dot"></div>
+      <div id="statusText" class="status-text">Sleep</div>
+    </div>
+  </div>
+
+  <div class="url-section">
+    <div class="section-title">Applet Configuration</div>
+    <div class="input-group">
+      <label for="appUrl">Studio Target URL</label>
+      <input type="url" id="appUrl" placeholder="https://ais-pre-r5uswfubwv5pusctmo...run.app" />
+    </div>
+  </div>
+
+  <div class="action-section">
+    <div class="section-title">Operations</div>
+    <button id="syncBtn" class="btn">
+      🔄 Sync Page to Studio
+    </button>
+    <button id="toggleSleepBtn" class="btn btn-secondary">
+      💤 Toggle Active/Sleep
+    </button>
+  </div>
+
+  <div class="page-info">
+    <div class="info-label">Detected Context</div>
+    <div id="detectedUrl" class="info-value">No tab scanned</div>
+    <div class="info-label" style="margin-top: 8px;">Playback Status</div>
+    <div id="playbackStatus" class="info-value">Offline</div>
+  </div>
+
+  <div class="footer">
+    SYNC ENGINE V1.0.0
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
